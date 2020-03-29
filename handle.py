@@ -1,19 +1,19 @@
-import dateparser
-import datetime
-import time
 import functools
 import operator
-
-import json
-import pickle
-
-import requests
 import re
+import requests
+import time
+import json
 
-import subprocess
-import os
+from config import config
+
+_back  = ( '⬅ Back',   lambda h: h.restore() )
+_close = ( '❌ Cancel', lambda h: h.close()   )
 
 class Handle:
+
+  token       = config['token']
+  bot_handle  = config['bot_handle']
 
   def __init__(self, chat_id, parent):
     self.session = requests.Session()
@@ -22,6 +22,7 @@ class Handle:
     self.message_id  = ''
 
     self.parent = parent
+    self.hashes = []
 
     self.state = []
 
@@ -53,7 +54,7 @@ class Handle:
       'sendMessage', {
         'text': text,
         'reply_markup': json.dumps({
-          'inline_keyboard': [[ { 'text': k[0], 'callback_data': k[0] + hash }  for k in key] for key in keyboard]
+          'inline_keyboard': [[ { 'text': k[0], 'callback_data': k[0] + hash } for k in key] for key in keyboard]
         })
       }
     )
@@ -77,7 +78,7 @@ class Handle:
         'text': text,
         'message_id': self.message_id,
         'reply_markup': json.dumps({
-          'inline_keyboard': [[ { 'text': k[0], 'callback_data': k[0] + hash }  for k in key] for key in keyboard]
+          'inline_keyboard': [[ { 'text': k[0], 'callback_data': k[0] + hash } for k in key] for key in keyboard]
         }),
       }
     )
@@ -85,7 +86,23 @@ class Handle:
     if keyboard != []:
       self.parent.callbacks.append(functools.reduce(operator.concat, [[ (k[0] + hash, k[1], self) for k in key] for key in keyboard]))
 
+  def recv(self, callback):
+    hash = str(time.time())
+    self.hashes.append(hash)
+
+    def anon(*args, **kargs):
+      callback(*args, **kargs)
+      if len(self.hashes):
+        self.parent.callbacks_recv[self.hashes.pop()] = None
+
+    self.parent.callbacks_recv[hash] = (self.chat_id, anon, self)
+
   def restore(self):
     s = self.state.pop()
     s = self.state.pop()
     self.edit(s['text'], keyboard = s['keyboard'])
+    if len(self.hashes):
+      self.parent.callbacks_recv[self.hashes.pop()] = None
+
+  def close(self):
+    self._request('deleteMessage', { 'message_id': self.message_id })

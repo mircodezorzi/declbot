@@ -2,11 +2,14 @@ import json
 import requests
 import threading
 import re
-import operator
 
 from handle import Handle
+from config import config
 
 class Puller:
+
+  token       = config['token']
+  bot_handle  = config['bot_handle']
 
   def __init__(self):
     self.session     = requests.Session()
@@ -15,6 +18,7 @@ class Puller:
 
     self.callback_data = []
     self.callbacks = []
+    self.callbacks_recv = {}
 
   def __enter__(self):
     with open('/home/mirco/.cache/telegram', 'r') as f:
@@ -41,10 +45,16 @@ class Puller:
 
   def execute(self, commands):
     while True:
-      self.update()
+      try:
+        self.update()
+      except Exception as e:
+        print(e)
       for i in self.updates:
+        for k in self.callbacks_recv.keys():
+          if self.callbacks_recv[k] and i['chat']['id'] == self.callbacks_recv[k][0]:
+            self.callbacks_recv[k][1](self.callbacks_recv[k][2])
         for command in commands:
-          if re.match('/{}({})?'.format(command[0], self.bot_handle), i.get('text')):
+          if re.match('/{}({})?'.format(command[0], self.bot_handle), i.get('text', '')) or re.match('/{}({})?'.format(command[0], self.bot_handle), i.get('caption', '')):
             try:
               threading.Thread(target=command[1], args=(Handle(i['chat']['id'], self), i)).start()
             except Exception as e:
