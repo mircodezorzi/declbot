@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
-#
-from puller import Puller
 
-def schedule(h, message):
-  h.send('hello',
-    [
-      [
-        ('upcoming', lambda h: h.edit('upcoming', [[ ( 'back', lambda h: h.restore() ) ]] ) ),
-        ('schedule', lambda h: h.edit('schedule') )],
+import subprocess
+import time
+import os
 
-      [ ('settings', lambda h: h.edit('settings') )                                        ],
-    ]
-  )
+from client import Client
+client = Client()
 
-commands = {
-  ( 'schedule', schedule ),
-}
+@client.command(
+  cs = [ 'tex' ],
+  description = 'generate image given latex code')
+def tex(h, c):
+  tmp_file = 'file.png'
+  text = ' '.join(c['text'].split(' ')[1:])
+  with open('file.tex', 'w') as f:
+    f.write(f'\\documentclass[border={{20pt 20pt 20pt 20pt}}]{{standalone}}\\begin{{document}}${text}$\\end{{document}}')
+  os.system('pdflatex -interaction nonstopmode -file-line-error file.tex')
+  os.system('convert -density 300 file.pdf -quality 90 file.png')
+  h.send_image(open(tmp_file, 'rb').read())
+    time.sleep(1)
 
-with Puller() as p:
-  p.execute(commands)
+@client.command(
+  cs = [ 'f', 'fortune' ],
+  description = 'Fortune')
+def fortune(h, message):
+  s = subprocess.run(['fortune'], capture_output=True)
+  h.send(s.stdout.decode())
+
+client.run()

@@ -1,27 +1,36 @@
-``` python
+```python
+#!/usr/bin/env python3
 
-def schedule(h):
-  h.edit('schedule, waiting for response!', [[ _back ]])
-  h.recv(lambda h: h.edit('done!'))
+import os
 
-def dashboard(h, message):
-  h.send('Dashboard',
+from client import Client
+client = Client()
+
+@client.command(cs = [ 'tex' ], description = 'generate image given latex code')
+def tex(h, c):
+  tmp_file = 'file.png'
+  text = ' '.join(c['text'].split(' ')[1:])
+  with open('file.tex', 'w') as f:
+    f.write(f'\\documentclass[border={{20pt 20pt 20pt 20pt}}]{{standalone}}\\begin{{document}}${text}$\\end{{document}}')
+  os.system('pdflatex -interaction nonstopmode -file-line-error file.tex')
+  os.system('convert -density 300 file.pdf -quality 90 file.png')
+  h.send_image(open(tmp_file, 'rb').read())
+
+@client.command(cs = [ 'dashboard' ], description = 'dashboard')
+def dashboard(h, c):
+  h.send('Dashboard', [
     [
-      [
-        ('📆 Upcoming', lambda h: h.edit('upcoming', [[ _back ]] ) ),
-        ('📌 Schedule', schedule )
-      ],
-      [
-        ('⚙ Settings', lambda h: h.edit('settings', [[ _back ]]) )
-      ],
-      [ _close ]
+        ('a', 'a_callback'),
+        ('b', lambda x: print('b')),
+    ],
+    [
+        ('c', lambda x: print('c')),
     ]
-  )
+  ])a
 
-commands = {
-  ( 'dashboard', dashboard ),
-}
+@client.callback(cs = 'a_callback')
+def a_callback(h, c):
+  h.edit('something else')
 
-with Puller() as p:
-  p.execute(commands)
+client.run()
 ```

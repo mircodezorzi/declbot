@@ -7,9 +7,6 @@ import json
 
 from config import config
 
-_back  = ( '⬅ Back',   lambda h: h.restore() )
-_close = ( '❌ Cancel', lambda h: h.close()   )
-
 class Handle:
 
   token       = config['token']
@@ -29,7 +26,8 @@ class Handle:
   def _request(self, endpoint, args = {}, **kargs):
     default = {
       'chat_id': self.chat_id,
-      'parse_mode': 'html'
+      'parse_mode': 'html',
+      'disable_web_page_preview': True,
     }
 
     return self.session.post(
@@ -41,6 +39,13 @@ class Handle:
       **kargs,
     ).json()['result']
 
+  def send_image(self, image):
+    m = self._request(
+      'sendPhoto',
+      files={ "photo": image }
+    )
+    self.message_id = m['message_id']
+
   def send(self, text, keyboard = []):
     hash = str(time.time())
 
@@ -50,11 +55,17 @@ class Handle:
         'keyboard': keyboard,
       })
 
+    def get_key(k):
+      return {
+        'text': k[0],
+        'callback_data': k[1] if callable(k[1]) else k[0]
+    }
+
     m = self._request(
       'sendMessage', {
         'text': text,
         'reply_markup': json.dumps({
-          'inline_keyboard': [[ { 'text': k[0], 'callback_data': k[0] + hash } for k in key] for key in keyboard]
+          'inline_keyboard': [[ get_key(key) for key in row] for row in keyboard]
         })
       }
     )
@@ -97,9 +108,10 @@ class Handle:
 
     self.parent.callbacks_recv[hash] = (self.chat_id, anon, self)
 
-  def restore(self):
+  def restore(self, n):
     s = self.state.pop()
-    s = self.state.pop()
+    for i in range(n):
+      s = self.state.pop()
     self.edit(s['text'], keyboard = s['keyboard'])
     if len(self.hashes):
       self.parent.callbacks_recv[self.hashes.pop()] = None
