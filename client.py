@@ -8,7 +8,6 @@ import functools
 import os
 import uuid
 
-from context import Context
 from handle  import Handle
 from worker  import Queue
 from config  import config
@@ -17,8 +16,6 @@ class Client:
 
   token       = config['token']
   bot_handle  = config['bot_handle']
-
-  update_url = f''
 
   def __init__(self):
     self.session = requests.Session()
@@ -38,6 +35,7 @@ class Client:
 
     self.worker = Queue(5)
 
+    # Automatically register /help command
     @self.command(cs = [ 'help' ], description = 'Show this message')
     def help(h, c):
       s = ''
@@ -46,28 +44,28 @@ class Client:
       h.send(s)
 
   def command(self, cs, description):
-    def decorator(f):
-      id = uuid.uuid1()
-      self.commands['functions'][id] = {
+    def _decorator(f):
+      uid = uuid.uuid1()
+      self.commands['functions'][uid] = {
         'callback': f,
         'commands': ['/' + c for c in cs],
         'description': description
       }
       for c in cs:
-        self.commands['keys']['/' + c] = id
-        self.commands['keys']['/' + c + self.bot_handle] = id
+        self.commands['keys']['/' + c] = uid
+        self.commands['keys']['/' + c + self.bot_handle] = uid
 
-    return decorator
+    return _decorator
 
   def callback(self, cs):
-    def decorator(f):
-      id = uuid.uuid1()
-      self.callbacks['functions'][id] = {
+    def _decorator(f):
+      uid = uuid.uuid1()
+      self.callbacks['functions'][uid] = {
         'callback': f,
         'commands': cs,
       }
-      self.callbacks['keys'][cs] = id
-    return decorator
+      self.callbacks['keys'][cs] = uid
+    return _decorator
 
   def run(self):
     self._load()
@@ -102,7 +100,6 @@ class Client:
     while True:
       self._update()
       for i in self.message_queue:
-        #print('\033[1;37;40m' + i['message']['from'].get('username', ''), ':\033[0m', i['message'].get('text', ''))
         if i.get('message'):
           i = i['message']
           arg = i.get('text', '').split(' ')[0]
@@ -110,13 +107,9 @@ class Client:
           key = self.commands['keys'].get(arg, None)
           if key:
             self.worker.push(self.commands['functions'][key]['callback'], Handle(i['chat']['id'], None), i)
-
         elif i.get('callback_query'):
           i = i['callback_query']
           key = self.callbacks['keys'].get(i['data'], None)
           if key:
             self.worker.push(self.callbacks['functions'][key]['callback'], Handle(i['message']['chat']['id'], None), i)
-          else:
-            print('warning, no ident found', i['data'])
-
         self.message_queue.pop(0)
